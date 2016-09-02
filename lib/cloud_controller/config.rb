@@ -280,6 +280,8 @@ module VCAP::CloudController
           optional(:general_limit) => Integer,
           optional(:reset_interval_in_minutes) => Integer,
         },
+
+        :shared_isolation_segment_name => String
       }
     end
 
@@ -402,9 +404,6 @@ module VCAP::CloudController
         config[:droplets][:max_staged_droplets_stored] ||= 5
         config[:minimum_candidate_stagers] = (config[:minimum_candidate_stagers] && config[:minimum_candidate_stagers] > 0) ? config[:minimum_candidate_stagers] : 5
         config[:bits_service] ||= { enabled: false }
-        config[:rate_limiter] ||= { enabled: false }
-        config[:rate_limiter][:general_limit] ||= 2000
-        config[:rate_limiter][:reset_interval_in_minutes] ||= 60
 
         unless config.key?(:users_can_select_backend)
           config[:users_can_select_backend] = true
