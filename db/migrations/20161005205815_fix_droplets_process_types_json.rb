@@ -38,8 +38,10 @@ Sequel.migration do
         begin
           MultiJson.load(droplet[:process_types])
         rescue
-          json_command = MultiJson.dump({ web: droplet[:process_types][8..-3] })
-          batcher.add_command(json_command, droplet[:id])
+          if droplet[:process_types]
+            json_command = MultiJson.dump({ web: droplet[:process_types][8..-3] })
+            batcher.add_command(json_command, droplet[:id])
+          end
         end
       end
 
