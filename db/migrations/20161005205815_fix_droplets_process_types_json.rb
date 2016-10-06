@@ -2,7 +2,7 @@ Sequel.migration do
   droplet_process_type_batcher = Class.new do
     def initialize(db)
       @db               = db
-      @max_batch        = 5_000
+      @max_batch        = 1_000
       @batched_commands = []
     end
 
@@ -38,10 +38,9 @@ Sequel.migration do
         begin
           MultiJson.load(droplet[:process_types])
         rescue
-          if droplet[:process_types]
-            json_command = MultiJson.dump({ web: droplet[:process_types][8..-3] })
-            batcher.add_command(json_command, droplet[:id])
-          end
+          command      = droplet[:process_types].nil? ? '' : droplet[:process_types][8..-3]
+          json_command = MultiJson.dump({ web: command })
+          batcher.add_command(json_command, droplet[:id])
         end
       end
 
