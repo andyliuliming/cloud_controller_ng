@@ -24,6 +24,7 @@ module VCAP::CloudController
           droplet:               droplet,
           command:               message.command,
           app:                   app,
+          disk_in_mb:            message.disk_in_mb || config[:default_app_disk_in_mb],
           memory_in_mb:          message.memory_in_mb || config[:default_app_memory],
           sequence_id:           app.max_task_sequence_id
         )

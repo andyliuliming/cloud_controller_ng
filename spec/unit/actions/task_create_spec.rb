@@ -12,7 +12,7 @@ module VCAP::CloudController
       let(:droplet) { DropletModel.make(app_guid: app.guid, state: DropletModel::STAGED_STATE) }
       let(:command) { 'bundle exec rake panda' }
       let(:name) { 'my_task_name' }
-      let(:message) { TaskCreateMessage.new name: name, command: command, memory_in_mb: 1024 }
+      let(:message) { TaskCreateMessage.new name: name, command: command, disk_in_mb: 2048, memory_in_mb: 1024 }
       let(:client) { instance_double(VCAP::CloudController::Diego::NsyncClient) }
       let(:user_guid) { 'user-guid' }
       let(:user_email) { 'user-email' }
@@ -33,6 +33,7 @@ module VCAP::CloudController
         expect(task.droplet).to eq(droplet)
         expect(task.command).to eq(command)
         expect(task.name).to eq(name)
+        expect(task.disk_in_mb).to eq(2048)
         expect(task.memory_in_mb).to eq(1024)
         expect(TaskModel.count).to eq(1)
       end
@@ -96,12 +97,20 @@ module VCAP::CloudController
       describe 'default values' do
         let(:message) { TaskCreateMessage.new name: name, command: command }
 
-        it 'sets memory_in_mb to configured :default_app_memory' do
-          config[:default_app_memory] = 1234
+        before { config[:default_app_memory] = 200 }
+
+        it 'sets disk_in_mb to configured :default_app_disk_in_mb' do
+          config[:default_app_disk_in_mb] = 200
 
           task = task_create_action.create(app, message, user_guid, user_email)
 
-          expect(task.memory_in_mb).to eq(1234)
+          expect(task.disk_in_mb).to eq(200)
+        end
+
+        it 'sets memory_in_mb to configured :default_app_memory' do
+          task = task_create_action.create(app, message, user_guid, user_email)
+
+          expect(task.memory_in_mb).to eq(200)
         end
       end
 
