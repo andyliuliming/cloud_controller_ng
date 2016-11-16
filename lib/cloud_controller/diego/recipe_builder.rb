@@ -89,10 +89,19 @@ module VCAP::CloudController
           action:                           timeout(action_builder.action, timeout_ms: config[:staging][:timeout_in_seconds].to_i * 1000),
           environment_variables:            action_builder.task_environment_variables,
           cached_dependencies:              action_builder.cached_dependencies,
+          PlacementTags:                    find_staging_isolation_segment(staging_details)
         )
       end
 
       private
+
+      def find_staging_isolation_segment(staging_details)
+        if staging_details.isolation_segment
+          [staging_details.isolation_segment.name]
+        else
+          []
+        end
+      end
 
       def envs_for_diego(app, task)
         running_envs = VCAP::CloudController::EnvironmentVariableGroup.running.environment_json
