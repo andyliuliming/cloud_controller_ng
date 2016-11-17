@@ -314,7 +314,7 @@ module VCAP::CloudController
           )
         end
 
-        let(:buildpack_task_action) { ::Diego::Bbs::Models::Action.new }
+        let(:task_action) { ::Diego::Bbs::Models::Action.new }
         let(:lifecycle_environment_variables) { [
           ::Diego::Bbs::Models::EnvironmentVariable.new(name: 'VCAP_APPLICATION', value: '{"greg":"pants"}'),
           ::Diego::Bbs::Models::EnvironmentVariable.new(name: 'MEMORY_LIMIT', value: '256m'),
@@ -330,13 +330,12 @@ module VCAP::CloudController
         }
 
         context 'with a buildpack backend' do
-          let(:droplet) { DropletModel.make(:buildpack, package: package, app: app) }
-          let(:package) { PackageModel.make(app: app) }
+          let(:droplet) { DropletModel.make(:buildpack, app: app) }
 
-          let(:lifecycle_action_builder) do
+          let(:task_action_builder) do
             instance_double(
               Buildpack::TaskActionBuilder,
-              action: buildpack_task_action,
+              action: task_action,
               task_environment_variables: lifecycle_environment_variables,
               stack: 'potato-stack',
               cached_dependencies: lifecycle_cached_dependencies,
@@ -345,7 +344,7 @@ module VCAP::CloudController
 
           let(:lifecycle_protocol) do
             instance_double(VCAP::CloudController::Diego::Buildpack::LifecycleProtocol,
-              task_action_builder: lifecycle_action_builder
+              task_action_builder: task_action_builder
             )
           end
 
@@ -373,7 +372,7 @@ module VCAP::CloudController
             expect(result.trusted_system_certificates_path).to eq('/etc/cf-system-certificates')
             expect(result.log_source).to eq('APP/TASK/potato-task')
 
-            expect(result.action).to eq(buildpack_task_action)
+            expect(result.action).to eq(task_action)
             expect(result.legacy_download_user).to eq('vcap')
             expect(result.cached_dependencies).to eq(lifecycle_cached_dependencies)
 
@@ -438,6 +437,57 @@ module VCAP::CloudController
                 ])
               end
             end
+          end
+        end
+
+        context 'with a docker backend' do
+          let(:package) { PackageModel.make(:docker, app: app) }
+
+          let(:task_action_builder) do
+            instance_double(
+              Docker::TaskActionBuilder,
+              action: task_action,
+              task_environment_variables: lifecycle_environment_variables,
+              cached_dependencies: lifecycle_cached_dependencies,
+            )
+          end
+
+          let(:lifecycle_protocol) do
+            instance_double(VCAP::CloudController::Diego::Docker::LifecycleProtocol,
+              task_action_builder: task_action_builder
+            )
+          end
+
+          before do
+            allow(LifecycleProtocol).to receive(:protocol_for_type).with('docker').and_return(lifecycle_protocol)
+            calculator = instance_double(TaskCpuWeightCalculator, calculate: 25)
+            allow(TaskCpuWeightCalculator).to receive(:new).with(memory_in_mb: task.memory_in_mb).and_return(calculator)
+          end
+
+          it 'constructs a TaskDefinition with app task instructions' do
+            result = recipe_builder.build_app_task(config, task)
+            expected_callback_url = "http://#{user}:#{password}@#{internal_service_hostname}:#{external_port}/internal/v3/tasks/#{task.guid}/completed"
+
+            expect(result.log_guid).to eq(app.guid)
+            expect(result.memory_mb).to eq(2048)
+            expect(result.disk_mb).to eq(1024)
+            expect(result.environment_variables).to eq(lifecycle_environment_variables)
+            expect(result.root_fs).to eq('user/preloaded:potato-stack')
+            expect(result.completion_callback_url).to eq(expected_callback_url)
+            expect(result.privileged).to be(false)
+            expect(result.egress_rules).to eq([
+              rule_dns_everywhere,
+              rule_http_everywhere
+            ])
+            expect(result.trusted_system_certificates_path).to eq('/etc/cf-system-certificates')
+            expect(result.log_source).to eq('APP/TASK/potato-task')
+
+            expect(result.action).to eq(task_action)
+            expect(result.legacy_download_user).to eq('vcap')
+            expect(result.cached_dependencies).to eq(lifecycle_cached_dependencies)
+
+            expect(result.metrics_guid).to eq('')
+            expect(result.cpu_weight).to eq(25)
           end
         end
       end
