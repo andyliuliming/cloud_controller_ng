@@ -10,9 +10,13 @@ module VCAP::CloudController
 
     get '/v2/syslog_drain_urls', :list
     def list
+      from_self_tag = false
+      if App.db.database_type == :mssql
+        from_self_tag = true
+      end
       guid_to_drain_maps =
         v2_apps_with_syslog_drains_dataset.
-        union(v3_apps_with_syslog_drains_dataset, from_self: false, all: true).
+        union(v3_apps_with_syslog_drains_dataset, from_self: from_self_tag, all: true).
         order(:guid).
         limit(batch_size).
         offset(last_id).
@@ -33,14 +37,14 @@ module VCAP::CloudController
 
     def v2_apps_with_syslog_drains_dataset
       App.db[App.table_name].
-        join(ServiceBinding.table_name, app_id: :id).
-        where('syslog_drain_url IS NOT NULL').
-        where("syslog_drain_url != ''").
-        group("#{App.table_name}__guid".to_sym).
-        select(
-          "#{App.table_name}__guid".to_sym,
-          aggregate_function("#{ServiceBinding.table_name}__syslog_drain_url".to_sym).as(:syslog_drain_urls)
-        )
+          join(ServiceBinding.table_name, app_id: :id).
+          where('syslog_drain_url IS NOT NULL').
+          where("syslog_drain_url != ''").
+          group("#{App.table_name}__guid".to_sym).
+          select(
+            "#{App.table_name}__guid".to_sym,
+            aggregate_function("#{ServiceBinding.table_name}__syslog_drain_url".to_sym).as(:syslog_drain_urls)
+          )
     end
 
     def v3_apps_with_syslog_drains_dataset
@@ -60,6 +64,8 @@ module VCAP::CloudController
         Sequel.function(:string_agg, column, ',')
       elsif App.db.database_type == :mysql
         Sequel.function(:group_concat, column)
+      elsif App.db.database_type == :mssql
+        Sequel.function("dbo.GROUP_CONCAT", column)
       else
         raise 'Unknown database type'
       end

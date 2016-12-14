@@ -40,7 +40,7 @@ gem 'activemodel', '~> 4.2.7.1'
 gem 'actionpack', '~> 4.2.7.1'
 gem 'actionview', '~> 4.2.7.1'
 gem 'public_suffix'
-
+gem 'tiny_tds', '1.0.5'
 # Requiring this particular commit to get a fix to a race condition when subscribing before a connection is made.
 # (see https://github.com/nats-io/ruby-nats/commit/3f3efc6bc41cc483f2d90cb9d401ba4aa3e727d3)
 # If a release newer than 0.5.1 is made that includes this commit, we may wish to switch to that.
