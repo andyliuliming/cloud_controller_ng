@@ -40,6 +40,7 @@ gem 'activemodel'
 gem 'actionpack'
 gem 'actionview'
 gem 'public_suffix'
+gem 'tiny_tds', '1.0.5'
 gem 'beefcake'
 
 # Requiring this particular commit to get a fix to a race condition when subscribing before a connection is made.
