@@ -1,11 +1,15 @@
 require 'actions/organization_delete'
 require 'queries/organization_user_roles_fetcher'
-require 'messages/isolation_segments_list_message'
 
 module VCAP::CloudController
   class OrganizationsController < RestController::ModelController
     def self.dependencies
-      [:username_and_roles_populating_collection_renderer, :username_lookup_uaa_client, :services_event_repository]
+      [
+        :username_and_roles_populating_collection_renderer,
+        :username_lookup_uaa_client,
+        :services_event_repository,
+        :user_event_repository
+      ]
     end
 
     def inject_dependencies(dependencies)
@@ -13,6 +17,7 @@ module VCAP::CloudController
       @user_roles_collection_renderer = dependencies.fetch(:username_and_roles_populating_collection_renderer)
       @username_lookup_uaa_client = dependencies.fetch(:username_lookup_uaa_client)
       @services_event_repository = dependencies.fetch(:services_event_repository)
+      @user_event_repository = dependencies.fetch(:user_event_repository)
     end
 
     define_attributes do
@@ -54,13 +59,9 @@ module VCAP::CloudController
 
     def before_update(obj)
       if request_attrs['default_isolation_segment_guid']
-        isolation_segment_guids = obj.isolation_segment_models.map(&:guid)
-        unless isolation_segment_guids.include?(request_attrs['default_isolation_segment_guid'])
-          raise CloudController::Errors::ApiError.new_from_details('InvalidRelation',
-            "Organization does not have access to Isolation Segment with guid: #{request_attrs['default_isolation_segment_guid']}")
-        end
-
-        obj.check_spaces_without_isolation_segments_empty!('Setting')
+        raise CloudController::Errors::ApiError.new_from_details(
+          'ResourceNotFound',
+          'Could not find Isolation Segment to set as the default.') unless IsolationSegmentModel.first(guid: request_attrs['default_isolation_segment_guid'])
       end
 
       super(obj)
@@ -132,6 +133,7 @@ module VCAP::CloudController
     [:user, :manager, :billing_manager, :auditor].each do |role|
       plural_role = role.to_s.pluralize
 
+      put "/v2/organizations/:guid/#{plural_role}/:user_id", "add_#{role}_by_user_id".to_sym
       put "/v2/organizations/:guid/#{plural_role}", "add_#{role}_by_username".to_sym
 
       define_method("add_#{role}_by_username") do |guid|
@@ -148,18 +150,18 @@ module VCAP::CloudController
         end
         raise CloudController::Errors::ApiError.new_from_details('UserNotFound', username) unless user_id
 
-        user = User.where(guid: user_id).first || User.create(guid: user_id)
+        add_role(guid, role, user_id, username)
+      end
 
-        org = find_guid_and_validate_access(:update, guid)
-        org.send("add_#{role}", user)
-
-        [HTTP::CREATED, object_renderer.render_json(self.class, org, @opts)]
+      define_method("add_#{role}_by_user_id") do |guid, user_id|
+        add_role(guid, role, user_id, '')
       end
     end
 
     [:user, :manager, :billing_manager, :auditor].each do |role|
       plural_role = role.to_s.pluralize
 
+      delete "/v2/organizations/:guid/#{plural_role}/:user_id", "remove_#{role}_by_user_id".to_sym
       delete "/v2/organizations/:guid/#{plural_role}", "remove_#{role}_by_username".to_sym
 
       define_method("remove_#{role}_by_username") do |guid|
@@ -188,7 +190,34 @@ module VCAP::CloudController
           org.send("remove_#{role}", user)
         end
 
+        @user_event_repository.record_organization_role_remove(
+          org,
+          user,
+          role,
+          SecurityContext.current_user,
+          SecurityContext.current_user_email,
+          request_attrs
+        )
+
         [HTTP::NO_CONTENT]
+      end
+
+      define_method("remove_#{role}_by_user_id") do |guid, user_id|
+        response = remove_related(guid, "#{role}s".to_sym, user_id, Organization)
+
+        user = User.first(guid: user_id)
+        user.username = '' unless user.username
+
+        @user_event_repository.record_organization_role_remove(
+          Organization.first(guid: guid),
+          user,
+          role.to_s,
+          SecurityContext.current_user,
+          SecurityContext.current_user_email,
+          {}
+        )
+
+        response
       end
     end
 
@@ -235,24 +264,23 @@ module VCAP::CloudController
       [HTTP::MOVED_PERMANENTLY, headers, 'Use DELETE /v2/private_domains/:domain_guid']
     end
 
-    get '/v2/organizations/:guid/isolation_segments', :list_isolation_segments
-    def list_isolation_segments(guid)
-      org = find_guid_and_validate_access(:read, guid)
-
-      dataset = IsolationSegmentModel.dataset.where(organizations: org)
-      message = IsolationSegmentsListMessage.from_params(@params)
-
-      [HTTP::OK, MultiJson.dump(Presenters::V3::PaginatedListPresenter.new(
-        dataset: dataset,
-        path: "/v2/organizations/#{org.guid}/isolation_segments",
-        message: message
-      ).to_hash)]
-    end
-
     define_messages
     define_routes
 
     private
+
+    def add_role(guid, role, user_id, username)
+      user = User.first(guid: user_id) || User.create(guid: user_id)
+
+      user.username = username
+
+      org = find_guid_and_validate_access(:update, guid)
+      org.send("add_#{role}", user)
+
+      @user_event_repository.record_organization_role_add(org, user, role, SecurityContext.current_user, SecurityContext.current_user_email, request_attrs)
+
+      [HTTP::CREATED, object_renderer.render_json(self.class, org, @opts)]
+    end
 
     def user_guid_parameter
       @opts[:q][0].split(':')[1] if @opts[:q]

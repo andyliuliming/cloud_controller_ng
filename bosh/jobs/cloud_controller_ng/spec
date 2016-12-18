@@ -28,9 +28,9 @@ templates:
   dea_ca.crt.erb: config/certs/dea_ca.crt
   dea_client.crt.erb: config/certs/dea_client.crt
   dea_client.key.erb: config/certs/dea_client.key
-  bbs_ca.crt.erb: config/certs/bbs_ca.crt
-  bbs_client.crt.erb: config/certs/bbs_client.crt
-  bbs_client.key.erb: config/certs/bbs_client.key
+  mutual_tls_ca.crt.erb: config/certs/mutual_tls_ca.crt
+  mutual_tls.crt.erb: config/certs/mutual_tls.crt
+  mutual_tls.key.erb: config/certs/mutual_tls.key
   pre-start.sh.erb: bin/pre-start
   post-start.sh.erb: bin/post-start
   migrate_db.sh.erb: bin/migrate_db
@@ -112,9 +112,15 @@ properties:
   cc.info.custom:
     description: "Custom attribute keys and values for /v2/info endpoint"
 
+  cc.nginx.ip:
+    description: "IP for nginx"
+    default: ""
   cc.external_port:
     description: "External Cloud Controller port"
     default: 9022
+  cc.tls_port:
+    description: "Port for internal TLS communication"
+    default: 9023
   cc.internal_service_hostname:
     description: "Internal hostname used to resolve the address of the Cloud Controller"
     default: "cloud-controller-ng.service.cf.internal"
@@ -521,6 +527,9 @@ properties:
   cc.allow_app_ssh_access:
     default: true
     description: "Allow users to change the value of the app-level allow_ssh attribute"
+  cc.default_app_ssh_access:
+    default: true
+    description: "When ssh is allowed and not explicitly set in the application, new applications will start with ssh service enabled"
   cc.flapping_crash_count_threshold:
     default: 3
     description: "The threshold of crashes after which the app is marked as flapping"
@@ -752,6 +761,12 @@ properties:
   cc.bits_service.private_endpoint:
     description: "Private url for the bits-service service"
     default: ""
+  cc.bits_service.username:
+    description: "Username for the bits-service"
+    default: ""
+  cc.bits_service.password:
+    description: "Password for the bits-service"
+    default: ""
 
   cc.rate_limiter.enabled:
     description: "Enable rate limiting for UAA-authenticated endpoints per user or client"
@@ -772,14 +787,15 @@ properties:
   cc.diego.bbs.url:
     description: "URL of the BBS Server"
     default: https://bbs.service.cf.internal:8889
-  cc.diego.bbs.ca_cert:
-    description: "PEM-encoded CA certificate for communication with the BBS"
+
+  cc.mutual_tls.ca_cert:
+    description: "PEM-encoded CA certificate for secure, mutually authenticated TLS communication"
     default: "temporary default, remove with temporary_local_staging"
-  cc.diego.bbs.client_cert:
-    description: "PEM-encoded server certificate for communication with the BBS"
+  cc.mutual_tls.public_cert:
+    description: "PEM-encoded certificate for secure, mutually authenticated TLS communication"
     default: "temporary default, remove with temporary_local_staging"
-  cc.diego.bbs.client_key:
-    description: "PEM-encoded server key for communication with the BBS"
+  cc.mutual_tls.private_key:
+    description: "PEM-encoded key for secure, mutually authenticated TLS communication"
     default: "temporary default, remove with temporary_local_staging"
 
   cc.diego.nsync_url:
@@ -797,6 +813,9 @@ properties:
   cc.diego.cc_uploader_url:
     description: "URL of cc uploader"
     default: http://cc-uploader.service.cf.internal:9090
+  cc.diego.use_privileged_containers_for_running:
+    description: "Whether or not to use privileged containers for running buildpack apps and tasks."
+    default: false
   cc.diego.use_privileged_containers_for_staging:
     description: "Whether or not to use privileged containers for staging tasks."
     default: false
@@ -815,4 +834,10 @@ properties:
 
   cc.diego.temporary_local_staging:
     description: "Temporary flag to enable staging directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_local_tasks:
+    description: "Temporary flag to run tasks directly to the bbs from cc"
+    default: false
+  cc.diego.temporary_local_apps:
+    description: "Temporary flag to manage app state directly to the bbs from cc"
     default: false

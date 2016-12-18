@@ -1,5 +1,6 @@
 require 'cloud_controller/diego/docker/lifecycle_data'
 require 'cloud_controller/diego/docker/staging_action_builder'
+require 'cloud_controller/diego/docker/task_action_builder'
 
 module VCAP
   module CloudController
@@ -20,8 +21,16 @@ module VCAP
             lifecycle_data.message
           end
 
-          def action_builder(config, staging_details)
+          def staging_action_builder(config, staging_details)
             StagingActionBuilder.new(config, staging_details)
+          end
+
+          def task_action_builder(config, task)
+            TaskActionBuilder.new(config, task, { droplet_path: task.droplet.docker_receipt_image })
+          end
+
+          def desired_lrp_builder(config, app_request)
+            DesiredLrpBuilder.new(config, app_request)
           end
 
           def desired_app_message(process)

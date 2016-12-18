@@ -278,6 +278,40 @@ module VCAP::CloudController
         end
       end
 
+      describe 'health_check_http_endpoint' do
+        it 'can be set to the root path' do
+          app.health_check_type = 'http'
+          app.health_check_http_endpoint = '/'
+          expect(app).to be_valid
+        end
+
+        it 'can be set to a valid uri path' do
+          app.health_check_type = 'http'
+          app.health_check_http_endpoint = '/v2'
+          expect(app).to be_valid
+        end
+
+        it 'needs a uri path' do
+          app.health_check_type = 'http'
+          expect(app).to_not be_valid
+          expect(app.errors.on(:health_check_http_endpoint)).to be_present
+        end
+
+        it 'cannot be set to a relative path' do
+          app.health_check_type = 'http'
+          app.health_check_http_endpoint = 'relative/path'
+          expect(app).to_not be_valid
+          expect(app.errors.on(:health_check_http_endpoint)).to be_present
+        end
+
+        it 'cannot be set to an empty string' do
+          app.health_check_type = 'http'
+          app.health_check_http_endpoint = ' '
+          expect(app).to_not be_valid
+          expect(app.errors.on(:health_check_http_endpoint)).to be_present
+        end
+      end
+
       describe 'health_check_type' do
         it "defaults to 'port'" do
           expect(app.health_check_type).to eq('port')
@@ -543,6 +577,7 @@ module VCAP::CloudController
           :docker_image,
           :docker_credentials_json,
           :environment_json,
+          :health_check_http_endpoint,
           :health_check_timeout,
           :health_check_type,
           :instances,
@@ -576,6 +611,7 @@ module VCAP::CloudController
           :docker_image,
           :docker_credentials_json,
           :environment_json,
+          :health_check_http_endpoint,
           :health_check_timeout,
           :health_check_type,
           :instances,
@@ -1295,6 +1331,13 @@ module VCAP::CloudController
             app.update(enable_ssh: !app.enable_ssh)
           }.to change { app.version }
         end
+
+        it 'should update the version when changing health_check_http_endpoint' do
+          app.update(health_check_type: 'http', health_check_http_endpoint: '/oldpath')
+          expect {
+            app.update(health_check_http_endpoint: '/newpath')
+          }.to change { app.version }
+        end
       end
     end
 
@@ -1364,10 +1407,26 @@ module VCAP::CloudController
             before do
               space.update(allow_ssh: true)
             end
+            context 'when default_app_ssh_access is true' do
+              before do
+                TestConfig.override({ default_app_ssh_access: true })
+              end
 
-            it 'sets enable_ssh to true' do
-              app = App.make(app: parent_app)
-              expect(app.enable_ssh).to eq(true)
+              it 'sets enable_ssh to true' do
+                app = App.make(app: parent_app)
+                expect(app.enable_ssh).to eq(true)
+              end
+            end
+
+            context 'when default_app_ssh_access is false' do
+              before do
+                TestConfig.override({ default_app_ssh_access: false })
+              end
+
+              it 'sets enable_ssh to false' do
+                app = App.make(app: parent_app)
+                expect(app.enable_ssh).to eq(false)
+              end
             end
           end
 

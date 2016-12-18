@@ -1,4 +1,5 @@
 require 'active_model'
+require 'utils/uri_utils'
 
 module VCAP::CloudController::Validators
   class ArrayValidator < ActiveModel::EachValidator
@@ -28,7 +29,7 @@ module VCAP::CloudController::Validators
 
   class UriValidator < ActiveModel::EachValidator
     def validate_each(record, attribute, value)
-      record.errors.add attribute, 'must be a valid URI' unless value.is_uri?
+      record.errors.add attribute, 'must be a valid URI' unless UriUtils.is_uri?(value)
     end
   end
 
@@ -38,7 +39,9 @@ module VCAP::CloudController::Validators
         record.errors.add(attribute, 'must be a hash')
       else
         value.each_key do |key|
-          if key =~ /^VCAP_/i
+          if key.length < 1
+            record.errors.add(attribute, 'key must be a minimum length of 1')
+          elsif key =~ /^VCAP_/i
             record.errors.add(attribute, 'cannot start with VCAP_')
           elsif key =~ /^VMC/i
             record.errors.add(attribute, 'cannot start with VMC_')

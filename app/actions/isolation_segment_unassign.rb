@@ -6,7 +6,7 @@ module VCAP::CloudController
       isolation_segment.db.transaction do
         isolation_segment.lock!
 
-        organizations.sort! { |o1, o2| o1.guid <=> o2.guid }.each do |org|
+        organizations.sort! { |o1, o2| o1.id <=> o2.id }.each do |org|
           org.lock!
           space_association_error! if segment_associated_with_space?(isolation_segment, org)
 
@@ -29,9 +29,7 @@ module VCAP::CloudController
 
     def unset_default_segment(isolation_segment, organization)
       if is_default_segment?(isolation_segment, organization)
-        organization.check_spaces_without_isolation_segments_empty!('Removing')
-
-        organization.update(default_isolation_segment_guid: nil)
+        organization.update(default_isolation_segment_model: nil)
       end
     end
 

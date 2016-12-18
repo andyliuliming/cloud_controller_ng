@@ -4,6 +4,7 @@ require 'cloud_controller/undo_app_changes'
 require 'cloud_controller/errors/application_missing'
 require 'repositories/app_usage_event_repository'
 require 'presenters/v3/cache_key_presenter'
+require 'utils/uri_utils'
 
 require_relative 'buildpack'
 
@@ -109,14 +110,14 @@ module VCAP::CloudController
     export_attributes :name, :production, :space_guid, :stack_guid, :buildpack,
                       :detected_buildpack, :detected_buildpack_guid, :environment_json, :memory, :instances, :disk_quota,
                       :state, :version, :command, :console, :debug, :staging_task_id,
-                      :package_state, :health_check_type, :health_check_timeout,
+                      :package_state, :health_check_type, :health_check_timeout, :health_check_http_endpoint,
                       :staging_failed_reason, :staging_failed_description, :diego, :docker_image, :package_updated_at,
                       :detected_start_command, :enable_ssh, :docker_credentials_json, :ports
 
     import_attributes :name, :production, :space_guid, :stack_guid, :buildpack,
       :detected_buildpack, :environment_json, :memory, :instances, :disk_quota,
       :state, :command, :console, :debug, :staging_task_id,
-      :service_binding_guids, :route_guids, :health_check_type,
+      :service_binding_guids, :route_guids, :health_check_type, :health_check_http_endpoint,
       :health_check_timeout, :diego, :docker_image, :app_guid, :enable_ssh,
       :docker_credentials_json, :ports
 
@@ -127,7 +128,7 @@ module VCAP::CloudController
     serializes_via_json :docker_credentials_json
 
     APP_STATES         = %w(STOPPED STARTED).map(&:freeze).freeze
-    HEALTH_CHECK_TYPES = %w(port none process).map(&:freeze).freeze
+    HEALTH_CHECK_TYPES = %w(port none process http).map(&:freeze).freeze
 
     # Last staging response which will contain streaming log url
     attr_accessor :last_stager_response
@@ -227,6 +228,13 @@ module VCAP::CloudController
 
       validate_health_check_type_and_port_presence_are_in_agreement
       validation_policies.map(&:validate)
+      validate_health_check_http_endpoint
+    end
+
+    def validate_health_check_http_endpoint
+      if health_check_type == 'http' && !UriUtils.is_uri_path?(health_check_http_endpoint)
+        errors.add(:health_check_http_endpoint, "HTTP health check endpoint is not a valid URI path: #{health_check_http_endpoint}")
+      end
     end
 
     def validate_uniqueness_of_type_for_same_app_model
@@ -271,7 +279,7 @@ module VCAP::CloudController
     end
 
     def before_save
-      self.enable_ssh = Config.config[:allow_app_ssh_access] && space.allow_ssh if enable_ssh.nil?
+      self.enable_ssh = Config.config[:allow_app_ssh_access] && space.allow_ssh && Config.config[:default_app_ssh_access] if enable_ssh.nil?
       set_new_version if version_needs_to_be_updated?
       super
     end
@@ -282,6 +290,7 @@ module VCAP::CloudController
       # * transitioning to STARTED
       # * memory is changed
       # * health check type is changed
+      # * health check http endpoint is changed
       # * enable_ssh is changed
       # * ports were changed by the user
       #
@@ -291,6 +300,7 @@ module VCAP::CloudController
       (column_changed?(:state) ||
         column_changed?(:memory) ||
         column_changed?(:health_check_type) ||
+        column_changed?(:health_check_http_endpoint) ||
         column_changed?(:enable_ssh) ||
         @ports_changed_by_user
       ) && started?

@@ -5,7 +5,6 @@ module VCAP::CloudController
     class InvalidManagerRelation < CloudController::Errors::InvalidRelation; end
     class InvalidSpaceQuotaRelation < CloudController::Errors::InvalidRelation; end
     class UnauthorizedAccessToPrivateDomain < RuntimeError; end
-    class OrganizationAlreadySet < RuntimeError; end
 
     SPACE_NAME_REGEX = /\A[[:alnum:][:punct:][:print:]]+\Z/
 
@@ -57,6 +56,33 @@ module VCAP::CloudController
       spaces_map[:rows].each do |space|
         space.associations[:security_groups] += default_security_groups
         space.associations[:security_groups].uniq!
+      end
+    }
+
+    many_to_many :staging_security_groups,
+    class: 'VCAP::CloudController::SecurityGroup',
+    join_table: 'staging_security_groups_spaces',
+    left_key: :staging_space_id,
+    right_key: :staging_security_group_id,
+    dataset: -> {
+      SecurityGroup.left_join(:staging_security_groups_spaces, staging_security_group_id: :id).
+        where(Sequel.or(staging_security_groups_spaces__staging_space_id: id, security_groups__staging_default: true))
+    },
+    eager_loader: ->(spaces_map) {
+      space_ids = spaces_map[:id_map].keys
+      # Set all associations to nil so if no records are found, we don't do another query when somebody tries to load the association
+      spaces_map[:rows].each { |space| space.associations[:staging_security_groups] = [] }
+
+      default_security_groups = SecurityGroup.where(staging_default: true).all
+
+      StagingSecurityGroupsSpace.where(staging_space_id: space_ids).eager(:security_group).all do |security_group_space|
+        space = spaces_map[:id_map][security_group_space.staging_space_id].first
+        space.associations[:staging_security_groups] << security_group_space.security_group
+      end
+
+      spaces_map[:rows].each do |space|
+        space.associations[:staging_security_groups] += default_security_groups
+        space.associations[:staging_security_groups].uniq!
       end
     }
 
@@ -134,6 +160,18 @@ module VCAP::CloudController
       if space_quota_definition && space_quota_definition.organization.guid != organization.guid
         errors.add(:space_quota_definition, :invalid_organization)
       end
+
+      if column_changed?(:isolation_segment_guid)
+        validate_isolation_segment(isolation_segment_model)
+      end
+    end
+
+    def validate_isolation_segment(isolation_segment_model)
+      if isolation_segment_model
+        validate_isolation_segment_set(isolation_segment_model)
+      else
+        validate_isolation_segment_unset
+      end
     end
 
     def validate_developer(user)
@@ -149,7 +187,7 @@ module VCAP::CloudController
     end
 
     def validate_change_organization(new_org)
-      raise OrganizationAlreadySet unless organization.nil? || organization.guid == new_org.guid
+      raise CloudController::Errors::ApiError.new_from_details('OrganizationAlreadySet') unless organization.nil? || organization.guid == new_org.guid
     end
 
     def self.user_visibility_filter(user)
@@ -208,6 +246,27 @@ module VCAP::CloudController
 
     def running_and_pending_tasks_count
       tasks_dataset.where(state: [TaskModel::PENDING_STATE, TaskModel::RUNNING_STATE]).count
+    end
+
+    def validate_isolation_segment_set(isolation_segment_model)
+      isolation_segment_guids = organization.isolation_segment_models.map(&:guid)
+      unless isolation_segment_guids.include?(isolation_segment_model.guid)
+        raise CloudController::Errors::ApiError.new_from_details('UnableToPerform',
+                                                                 'Adding the Isolation Segment to the Space',
+                                                                 "Only Isolation Segments in the Organization's allowed list can be used.")
+      end
+
+      raise CloudController::Errors::ApiError.new_from_details(
+        'UnableToPerform',
+        'Adding the Isolation Segment to the Space',
+        'Cannot change the Isolation Segment for a Space containing Apps') unless app_models.empty?
+    end
+
+    def validate_isolation_segment_unset
+      raise CloudController::Errors::ApiError.new_from_details(
+        'UnableToPerform',
+        'Removing the Isolation Segment from the Space',
+        'Cannot change the Isolation Segment for a Space containing Apps') unless app_models.empty?
     end
   end
 end

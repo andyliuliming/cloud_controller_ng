@@ -11,7 +11,7 @@ Sequel.migration do
       SQL
     end
     alter_table :apps do
-     set_column_type :metadata, String, size: 4096
+      set_column_type :metadata, String, size: 4096
       set_column_default :metadata, '{}'
     end
   end

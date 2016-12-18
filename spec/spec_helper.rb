@@ -1,9 +1,14 @@
 require File.expand_path('../../config/boot', __FILE__)
 
 if ENV['CODECLIMATE_REPO_TOKEN'] && ENV['COVERAGE']
-  require 'codeclimate-test-reporter'
-  CodeClimate::TestReporter.start
+  require 'simplecov'
+  SimpleCov.start do
+    add_filter '/spec/'
+    add_filter '/vendor/'
+    add_filter '/docs/'
+  end
 end
+ENV['PB_IGNORE_DEPRECATIONS'] = 'true'
 
 require 'fakefs/safe'
 require 'machinist/sequel'
@@ -15,6 +20,8 @@ require 'awesome_print'
 require 'steno'
 require 'webmock/rspec'
 require 'cf_message_bus/mock_message_bus'
+
+require 'pry'
 
 require 'cloud_controller'
 require 'allowy/rspec'

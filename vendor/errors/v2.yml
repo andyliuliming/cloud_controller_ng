@@ -143,6 +143,11 @@
   http_code: 403
   message: "Cannot remove last User in org"
 
+30007:
+  name: OrganizationAlreadySet
+  http_code: 400
+  message: 'Cannot change organization'
+
 40001:
   name: SpaceInvalid
   http_code: 400
@@ -371,7 +376,7 @@
 90005:
   name: UnbindableService
   http_code: 400
-  message: "The service doesn't support binding."
+  message: "The service instance doesn't support binding."
 
 90006:
   name: InvalidLoggingServiceBinding
@@ -626,7 +631,7 @@
 170019:
   name: TaskError
   http_code: 500
-  message: "task failed: %s"
+  message: "Task failed: %s"
 
 170020:
   name: TaskWorkersUnavailable

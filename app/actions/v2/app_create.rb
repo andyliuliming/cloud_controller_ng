@@ -27,6 +27,7 @@ module VCAP::CloudController
             command:                 request_attrs['command'],
             console:                 request_attrs['console'],
             debug:                   request_attrs['debug'],
+            health_check_http_endpoint:       request_attrs['health_check_http_endpoint'],
             health_check_type:       request_attrs['health_check_type'],
             health_check_timeout:    request_attrs['health_check_timeout'],
             diego:                   request_attrs['diego'],
@@ -58,11 +59,14 @@ module VCAP::CloudController
           create_message = PackageCreateMessage.new({ type: 'docker', app_guid: app.guid, data: { image: request_attrs['docker_image'] } })
           PackageCreate.create_without_event(create_message)
         elsif buildpack_type_requested || !docker_type_requested
-          app.buildpack_lifecycle_data = BuildpackLifecycleDataModel.new(
+          # it is important to create the lifecycle model with the app instead of doing app.buildpack_lifecycle_data_model = x
+          # because mysql will deadlock when requests happen concurrently otherwise.
+          BuildpackLifecycleDataModel.create(
             buildpack: request_attrs['buildpack'],
             stack:     get_stack_name(request_attrs['stack_guid']),
+            app:       app
           )
-          app.save
+          app.buildpack_lifecycle_data(true) # reload buildpack_lifecycle_data association
         end
       end
 

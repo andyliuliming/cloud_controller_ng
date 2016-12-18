@@ -3,6 +3,7 @@ require 'spec_helper'
 module VCAP::CloudController
   RSpec.describe VCAP::CloudController::OrganizationsController do
     let(:org) { Organization.make }
+    let(:assigner) { VCAP::CloudController::IsolationSegmentAssign.new }
 
     describe 'Query Parameters' do
       it { expect(described_class).to be_queryable_by(:name) }
@@ -145,64 +146,7 @@ module VCAP::CloudController
       end
     end
 
-    describe 'GET /v2/organizations/:guid/isolation_segments' do
-      let(:space) { Space.make(organization: org) }
-      let(:user) { make_developer_for_space(space) }
-
-      before do
-        set_current_user(user)
-      end
-
-      it 'returns Unauthorized when the user cannot read from the org' do
-        set_current_user(User.make)
-        get "/v2/organizations/#{org.guid}/isolation_segments"
-
-        expect(last_response.status).to eq(403)
-        expect(decoded_response['error_code']).to match(/CF-NotAuthorized/)
-      end
-
-      context 'when no isolation segments have been assigned' do
-        it 'returns an empty list' do
-          get "/v2/organizations/#{org.guid}/isolation_segments"
-
-          expect(last_response.status).to eq(200)
-
-          expect(decoded_response['resources']).to be_empty
-        end
-      end
-
-      context 'when isolation segments have been assigned' do
-        let(:is1) { IsolationSegmentModel.make }
-        let(:is2) { IsolationSegmentModel.make }
-
-        before do
-          is1.add_organization(org)
-          is2.add_organization(org)
-        end
-
-        it 'returns list of the isolation segments' do
-          get "/v2/organizations/#{org.guid}/isolation_segments"
-
-          expect(last_response.status).to eq(200)
-
-          response_guids = decoded_response['resources'].map { |r| r['guid'] }
-          expect(response_guids).to eq([is1.guid, is2.guid])
-        end
-
-        it 'allows pagination of the response' do
-          get "/v2/organizations/#{org.guid}/isolation_segments?per_page=1"
-
-          expect(last_response.status).to eq(200)
-
-          response_guids = decoded_response['resources'].map { |r| r['guid'] }
-          expect(response_guids).to eq([is1.guid])
-        end
-      end
-    end
-
     describe 'setting the default isolation segment' do
-      let(:assigner) { VCAP::CloudController::IsolationSegmentAssign.new }
-
       let(:isolation_segment) { IsolationSegmentModel.make }
       let(:isolation_segment2) { IsolationSegmentModel.make }
 
@@ -211,7 +155,7 @@ module VCAP::CloudController
         let!(:user) { set_current_user(make_developer_for_space(space)) }
 
         before do
-          isolation_segment.add_organization(org)
+          assigner.assign(isolation_segment, [org])
         end
 
         it 'returns a 403' do
@@ -232,12 +176,12 @@ module VCAP::CloudController
         end
 
         context 'when the isolation segment does not exist' do
-          it 'returns a 400' do
+          it 'returns a 404' do
             put "/v2/organizations/#{org.guid}", MultiJson.dump({
               default_isolation_segment_guid: 'bogus-guid'
             })
 
-            expect(last_response.status).to eq(400)
+            expect(last_response.status).to eq(404)
           end
         end
 
@@ -281,23 +225,6 @@ module VCAP::CloudController
               expect(org.default_isolation_segment_model).to eq(isolation_segment)
             end
           end
-
-          context 'when the org has a space with no assigned segment and the space contains apps' do
-            before do
-              space = Space.make(organization: org)
-              AppModel.make(space: space)
-            end
-
-            it 'returns a 400 and does not change the default isolation segment' do
-              put "/v2/organizations/#{org.guid}", MultiJson.dump({
-                default_isolation_segment_guid: isolation_segment2.guid
-              })
-
-              expect(last_response.status).to eq(400)
-              org.reload
-              expect(org.default_isolation_segment_model).to eq(isolation_segment)
-            end
-          end
         end
       end
 
@@ -306,8 +233,8 @@ module VCAP::CloudController
 
         before do
           set_current_user_as_admin
-          isolation_segment.add_organization(org)
-          isolation_segment2.add_organization(org)
+          assigner.assign(isolation_segment, [org])
+          assigner.assign(isolation_segment2, [org])
         end
 
         it 'sets the isolation segment as the org default' do
@@ -1286,6 +1213,7 @@ module VCAP::CloudController
         plural_role = role.to_s.pluralize
         describe "PUT /v2/organizations/:guid/#{plural_role}" do
           let(:user) { User.make(username: 'larry_the_user') }
+          let(:event_type) { "audit.user.organization_#{role}_add" }
 
           before do
             allow_any_instance_of(UaaClient).to receive(:id_for_username).with(user.username).and_return(user.guid)
@@ -1340,6 +1268,18 @@ module VCAP::CloudController
             expect(decoded_response['code']).to eq(20005)
           end
 
+          it 'creates an audit.user.organization_role_add when a role is associated to a space' do
+            before_event = Event.find(type: event_type, actee: user.guid)
+            expect(before_event).to be_nil
+
+            put "/v2/organizations/#{org.guid}/#{plural_role}", MultiJson.dump({ username: user.username })
+
+            event = Event.find(type: event_type, actee: user.guid)
+            expect(event).not_to be_nil
+            expect(event.organization_guid).to eq(org.guid)
+            expect(event.actor_name).to eq(SecurityContext.current_user_email)
+          end
+
           context 'when the feature flag "set_roles_by_username" is disabled' do
             before do
               FeatureFlag.new(name: 'set_roles_by_username', enabled: false).save
@@ -1371,6 +1311,7 @@ module VCAP::CloudController
         plural_role = role.to_s.pluralize
         describe "DELETE /v2/organizations/:guid/#{plural_role}" do
           let(:user) { User.make(username: 'larry_the_user') }
+          let(:event_type) { "audit.user.organization_#{role}_remove" }
 
           before do
             allow_any_instance_of(UaaClient).to receive(:id_for_username).with(user.username).and_return(user.guid)
@@ -1418,6 +1359,18 @@ module VCAP::CloudController
 
             expect(last_response.status).to eq(501)
             expect(decoded_response['code']).to eq(20005)
+          end
+
+          it 'creates an event of type audit.user.organization_role_remove when a user-role association is removed from the organization' do
+            before_event = Event.find(type: event_type, actee: user.guid)
+            expect(before_event).to be_nil
+
+            delete "/v2/organizations/#{org.guid}/#{plural_role}", MultiJson.dump({ username: user.username })
+
+            event = Event.find(type: event_type, actee: user.guid)
+            expect(event).not_to be_nil
+            expect(event.organization_guid).to eq(org.guid)
+            expect(event.actor_name).to eq(SecurityContext.current_user_email)
           end
 
           context 'when the feature flag "set_roles_by_username" is disabled' do
@@ -1479,6 +1432,106 @@ module VCAP::CloudController
 
                 expect(space.developers).to include(user)
               end
+            end
+          end
+        end
+      end
+    end
+
+    describe 'adding user roles by user guid' do
+      [:user, :manager, :billing_manager, :auditor].each do |role|
+        plural_role = role.to_s.pluralize
+        describe "PUT /v2/organizations/:guid/#{plural_role}/:user_id" do
+          let(:user) { User.make(username: 'larry_the_user') }
+          let(:other_user) { User.make(username: 'joe_the_user') }
+          let(:event_type) { "audit.user.organization_#{role}_add" }
+
+          before do
+            set_current_user(user)
+          end
+
+          context 'as an admin' do
+            before do
+              set_current_user_as_admin
+            end
+
+            it "makes the user a #{role} and generates an appropriate event" do
+              before_event = Event.find(type: event_type, actee: other_user.guid)
+              expect(before_event).to be_nil
+              put "/v2/organizations/#{org.guid}/#{plural_role}/#{other_user.guid}"
+
+              expect(last_response.status).to eq(201)
+              expect(org.send(plural_role)).to include(other_user)
+              expect(decoded_response['metadata']['guid']).to eq(org.guid)
+
+              event = Event.find(type: event_type, actee: other_user.guid)
+              expect(event).to_not be_nil
+              expect(event.organization_guid).to eq(org.guid)
+            end
+          end
+
+          context 'as a regular user' do
+            before do
+              org.add_user(user)
+            end
+
+            it 'returns a 403 and does not generate any event' do
+              put "/v2/organizations/#{org.guid}/#{plural_role}/#{other_user.guid}"
+
+              expect(last_response.status).to eq(403)
+
+              event = Event.find(type: event_type, actee: other_user.guid)
+              expect(event).to be_nil
+            end
+          end
+        end
+      end
+    end
+
+    describe 'removing user roles by user_id' do
+      [:user, :manager, :billing_manager, :auditor].each do |role|
+        plural_role = role.to_s.pluralize
+        describe "DELETE /v2/organizations/:guid/#{plural_role}/:user_id" do
+          let(:user) { User.make(username: 'larry_the_user') }
+          let(:other_user) { User.make(username: 'joe_the_user') }
+          let(:event_type) { "audit.user.organization_#{role}_remove" }
+
+          before do
+            set_current_user(user)
+            org.send("add_#{role}", other_user)
+          end
+
+          context 'as an admin' do
+            before do
+              set_current_user_as_admin
+            end
+
+            it "removes #{role} from the user and generates an appropriate event" do
+              before_event = Event.find(type: event_type, actee: other_user.guid)
+              expect(before_event).to be_nil
+              delete "/v2/organizations/#{org.guid}/#{plural_role}/#{other_user.guid}"
+
+              expect(last_response.status).to eq(204)
+              expect(org.send(plural_role)).to_not include(user)
+
+              event = Event.find(type: event_type, actee: other_user.guid)
+              expect(event).to_not be_nil
+              expect(event.organization_guid).to eq(org.guid)
+            end
+          end
+
+          context 'as a regular user' do
+            before do
+              org.add_user(user)
+            end
+
+            it 'returns a 403 and does not generate any event' do
+              delete "/v2/organizations/#{org.guid}/#{plural_role}/#{other_user.guid}"
+
+              expect(last_response.status).to eq(403)
+
+              event = Event.find(type: event_type, actee: other_user.guid)
+              expect(event).to be_nil
             end
           end
         end

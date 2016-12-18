@@ -12,12 +12,14 @@ RSpec.describe 'Apps' do
   describe 'GET /v2/apps' do
     let!(:process) do
       VCAP::CloudController::AppFactory.make(:unstaged,
-        app:                     VCAP::CloudController::AppModel.make(
+        app:                        VCAP::CloudController::AppModel.make(
           space:                 space,
           environment_variables: { 'RAILS_ENV' => 'staging' }
         ),
-        command:                 'hello_world',
-        docker_credentials_json: { 'docker_user' => 'bob', 'docker_password' => 'password', 'docker_email' => 'blah@blah.com' }
+        command:                    'hello_world',
+        docker_credentials_json:    { 'docker_user' => 'bob', 'docker_password' => 'password', 'docker_email' => 'blah@blah.com' },
+        health_check_type:          'http',
+        health_check_http_endpoint: '/health'
       )
     end
 
@@ -59,8 +61,9 @@ RSpec.describe 'Apps' do
               'debug'                      => nil,
               'staging_task_id'            => process.latest_droplet.guid,
               'package_state'              => 'STAGED',
-              'health_check_type'          => 'port',
+              'health_check_type'          => 'http',
               'health_check_timeout'       => nil,
+              'health_check_http_endpoint' => '/health',
               'staging_failed_reason'      => nil,
               'staging_failed_description' => nil,
               'diego'                      => false,
@@ -136,8 +139,9 @@ RSpec.describe 'Apps' do
                 'debug'                      => nil,
                 'staging_task_id'            => process.latest_droplet.guid,
                 'package_state'              => 'STAGED',
-                'health_check_type'          => 'port',
+                'health_check_type'          => 'http',
                 'health_check_timeout'       => nil,
+                'health_check_http_endpoint' => '/health',
                 'staging_failed_reason'      => nil,
                 'staging_failed_description' => nil,
                 'diego'                      => false,
@@ -173,7 +177,8 @@ RSpec.describe 'Apps' do
                     'service_instances_url'       => "/v2/spaces/#{space.guid}/service_instances",
                     'app_events_url'              => "/v2/spaces/#{space.guid}/app_events",
                     'events_url'                  => "/v2/spaces/#{space.guid}/events",
-                    'security_groups_url'         => "/v2/spaces/#{space.guid}/security_groups"
+                    'security_groups_url'         => "/v2/spaces/#{space.guid}/security_groups",
+                    'staging_security_groups_url' => "/v2/spaces/#{space.guid}/staging_security_groups"
                   }
                 },
                 'stack_url'                  => "/v2/stacks/#{process.stack.guid}",
@@ -347,6 +352,7 @@ RSpec.describe 'Apps' do
             'package_state'              => 'STAGED',
             'health_check_type'          => 'port',
             'health_check_timeout'       => nil,
+            'health_check_http_endpoint' => nil,
             'staging_failed_reason'      => nil,
             'staging_failed_description' => nil,
             'diego'                      => false,
@@ -421,6 +427,7 @@ RSpec.describe 'Apps' do
             'package_state'              => 'PENDING',
             'health_check_type'          => 'port',
             'health_check_timeout'       => nil,
+            'health_check_http_endpoint' => nil,
             'staging_failed_reason'      => nil,
             'staging_failed_description' => nil,
             'diego'                      => false,
@@ -484,6 +491,7 @@ RSpec.describe 'Apps' do
               'package_state'              => 'PENDING',
               'health_check_type'          => 'port',
               'health_check_timeout'       => nil,
+              'health_check_http_endpoint' => nil,
               'staging_failed_reason'      => nil,
               'staging_failed_description' => nil,
               'diego'                      => false,
@@ -560,6 +568,7 @@ RSpec.describe 'Apps' do
             'package_state'              => 'STAGED',
             'health_check_type'          => 'port',
             'health_check_timeout'       => nil,
+            'health_check_http_endpoint' => nil,
             'staging_failed_reason'      => nil,
             'staging_failed_description' => nil,
             'diego'                      => false,
@@ -638,6 +647,7 @@ RSpec.describe 'Apps' do
               'package_state'              => 'STAGED',
               'health_check_type'          => 'port',
               'health_check_timeout'       => nil,
+              'health_check_http_endpoint' => nil,
               'staging_failed_reason'      => nil,
               'staging_failed_description' => nil,
               'diego'                      => false,
@@ -737,6 +747,7 @@ RSpec.describe 'Apps' do
           'package_state'              => 'STAGED',
           'health_check_type'          => 'port',
           'health_check_timeout'       => nil,
+          'health_check_http_endpoint' => nil,
           'staging_failed_reason'      => nil,
           'staging_failed_description' => nil,
           'diego'                      => false,
@@ -986,6 +997,7 @@ RSpec.describe 'Apps' do
             'package_state'              => 'PENDING',
             'health_check_type'          => 'port',
             'health_check_timeout'       => nil,
+            'health_check_http_endpoint' => nil,
             'staging_failed_reason'      => nil,
             'staging_failed_description' => nil,
             'diego'                      => true,
@@ -1249,6 +1261,7 @@ RSpec.describe 'Apps' do
             'package_state'              => 'STAGED',
             'health_check_type'          => 'port',
             'health_check_timeout'       => nil,
+            'health_check_http_endpoint' => nil,
             'staging_failed_reason'      => nil,
             'staging_failed_description' => nil,
             'diego'                      => false,
@@ -1392,7 +1405,7 @@ RSpec.describe 'Apps' do
         expect(parsed_response).to be_a_response_like(
           {
             'read_sensitive_data' => true,
-            'read_basic_data' => true
+            'read_basic_data'     => true
           }
         )
       end
@@ -1406,7 +1419,7 @@ RSpec.describe 'Apps' do
         expect(parsed_response).to be_a_response_like(
           {
             'read_sensitive_data' => true,
-            'read_basic_data' => true
+            'read_basic_data'     => true
           }
         )
       end

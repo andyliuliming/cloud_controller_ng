@@ -21,6 +21,7 @@
 #Actually NGX host and port
 local_route: <%= discover_external_ip %>
 external_port: <%= p("cc.external_port") %>
+tls_port: <%= p("cc.tls_port") %>
 internal_service_hostname: <%= p("cc.internal_service_hostname") %>
 
 pid_filename: /this/isnt/used/by/the/worker
@@ -325,6 +326,7 @@ uaa_client_scope: <%= p("uaa.clients.cc-service-dashboards.scope") %>
 
 users_can_select_backend: <%= p("cc.users_can_select_backend") %>
 allow_app_ssh_access: <%= p("cc.allow_app_ssh_access") %>
+default_app_ssh_access: <%= p("cc.default_app_ssh_access") %>
 default_to_diego_backend: <%= p("cc.default_to_diego_backend") %>
 
 <% if_p("ssl.skip_cert_verify") do |skip_cert_verify|%>
@@ -344,19 +346,24 @@ bits_service:
   <% if p("cc.bits_service.enabled") %>
   public_endpoint: <%= p("cc.bits_service.public_endpoint") %>
   private_endpoint: <%= p("cc.bits_service.private_endpoint") %>
+  username: <%= p("cc.bits_service.username") %>
+  password: <%= p("cc.bits_service.password") %>
   <% end %>
 
 diego:
   temporary_local_staging: <%= p("cc.diego.temporary_local_staging") %>
+  temporary_local_tasks: <%= p("cc.diego.temporary_local_tasks") %>
+  temporary_local_apps: <%= p("cc.diego.temporary_local_apps") %>
   nsync_url: <%= p("cc.diego.nsync_url") %>
   stager_url: <%= p("cc.diego.stager_url") %>
   tps_url: <%= p("cc.diego.tps_url") %>
   file_server_url: <%= p("cc.diego.file_server_url") %>
   cc_uploader_url: <%= p("cc.diego.cc_uploader_url") %>
+  use_privileged_containers_for_running: <%= p("cc.diego.use_privileged_containers_for_running") %>
   use_privileged_containers_for_staging: <%= p("cc.diego.use_privileged_containers_for_staging") %>
   lifecycle_bundles: <%= p("cc.diego.lifecycle_bundles").to_json %>
   bbs:
     url: <%= p("cc.diego.bbs.url") %>
-    key_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_client.key
-    cert_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_client.crt
-    ca_file: /var/vcap/jobs/cloud_controller_ng/config/certs/bbs_ca.crt
+    key_file: /var/vcap/jobs/cloud_controller_worker/config/certs/mutual_tls.key
+    cert_file: /var/vcap/jobs/cloud_controller_worker/config/certs/mutual_tls.crt
+    ca_file: /var/vcap/jobs/cloud_controller_worker/config/certs/mutual_tls_ca.crt

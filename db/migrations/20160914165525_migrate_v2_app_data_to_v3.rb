@@ -3,10 +3,10 @@ Sequel.migration do
 
   up do
     collate_opts = {}
-    dbtype = if self.class.name.match(/mysql/i)
+    dbtype = if self.class.name =~ /mysql/i
                collate_opts[:collate] = :utf8_bin
                'mysql'
-             elsif self.class.name.match(/postgres/i)
+             elsif self.class.name =~ /postgres/i
                'postgres'
              elsif Sequel::Model.db.database_type == :mssql
                'mssql'
@@ -162,7 +162,7 @@ Sequel.migration do
       String :droplet_guid, null: false
       foreign_key [:droplet_guid], :droplets, key: :guid, name: :fk_tasks_droplet_guid
 
-      if self.class.name.match(/mysql/i)
+      if self.class.name =~ /mysql/i
         table_name = tables.find { |t| t =~ /tasks/ }
         run "ALTER TABLE `#{table_name}` CONVERT TO CHARACTER SET utf8;"
       end
@@ -173,7 +173,6 @@ Sequel.migration do
     ####
 
     transaction do
-
       ####
       ## Fill in v3 apps table data
       ###
@@ -287,7 +286,7 @@ Sequel.migration do
           DELETE a FROM droplets a, droplets b
           WHERE a.app_id=b.app_id AND a.id < b.id
         SQL
-      elsif dbtype =='postgres'
+      elsif dbtype == 'postgres'
         run postgres_prune_droplets_query
 
         run <<-SQL
@@ -354,7 +353,7 @@ Sequel.migration do
 
       if dbtype == 'mysql'
         run mysql_convert_to_v3_droplets_query
-      elsif dbtype =='postgres'
+      elsif dbtype == 'postgres'
         run postgres_convert_to_v3_droplets_query
       elsif dbtype == 'mssql'
         run mssql_convert_to_v3_droplets_query
@@ -395,7 +394,7 @@ Sequel.migration do
 
       if dbtype == 'mysql'
         run mysql_set_current_droplet_query
-      elsif dbtype =='postgres'
+      elsif dbtype == 'postgres'
         run postgres_set_current_droplet_query
       elsif dbtype == 'mssql'
         run mssql_set_current_droplet_query
@@ -405,9 +404,9 @@ Sequel.migration do
       ## Fill in guids for buildpack_lifecycle_data inserts done for apps and droplets
       ####
 
-      if self.class.name.match(/mysql/i)
+      if self.class.name =~ /mysql/i
         run 'update buildpack_lifecycle_data set guid=UUID();'
-      elsif self.class.name.match(/postgres/i)
+      elsif self.class.name =~ /postgres/i
         run 'update buildpack_lifecycle_data set guid=get_uuid();'
       elsif Sequel::Model.db.database_type == :mssql
         run 'update buildpack_lifecycle_data set guid=NEWID();'
@@ -428,9 +427,9 @@ Sequel.migration do
         UPDATE apps_routes SET app_port=8080 WHERE app_port IS NULL AND EXISTS (SELECT 1 FROM processes WHERE processes.docker_image IS NULL AND processes.id = apps_routes.app_id)
       SQL
 
-      if self.class.name.match(/mysql/i)
+      if self.class.name =~ /mysql/i
         run 'update apps_routes set guid=UUID() where guid is NULL;'
-      elsif self.class.name.match(/postgres/i)
+      elsif self.class.name =~ /postgres/i
         run 'update apps_routes set guid=get_uuid() where guid is NULL;'
       elsif Sequel::Model.db.database_type == :mssql
         run 'update apps_routes set guid=NEWID() where guid is NULL;'

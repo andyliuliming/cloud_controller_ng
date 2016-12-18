@@ -101,6 +101,7 @@ module VCAP::CloudController
       staging_details.staging_disk_in_mb    = disk_limit
       staging_details.environment_variables = environment_variables
       staging_details.lifecycle             = lifecycle
+      staging_details.isolation_segment     = IsolationSegmentSelector.for_space(space)
 
       staging_details
     end

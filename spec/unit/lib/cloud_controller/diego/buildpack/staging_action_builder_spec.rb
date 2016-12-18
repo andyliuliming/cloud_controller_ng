@@ -41,10 +41,11 @@ module VCAP::CloudController
           }
         end
         let(:buildpacks) { [] }
+        let(:generated_environment) { [::Diego::Bbs::Models::EnvironmentVariable.new(name: 'generated-environment', value: 'generated-value')] }
 
         before do
           allow(LifecycleBundleUriGenerator).to receive(:uri).with('the-buildpack-bundle').and_return('generated-uri')
-          allow(BbsEnvironmentBuilder).to receive(:build).with(env).and_return('generated-environment')
+          allow(BbsEnvironmentBuilder).to receive(:build).with(env).and_return(generated_environment)
         end
 
         describe '#action' do
@@ -96,7 +97,7 @@ module VCAP::CloudController
               ],
               user:            'vcap',
               resource_limits: ::Diego::Bbs::Models::ResourceLimits.new(nofile: 4),
-              env:             'generated-environment',
+              env:             generated_environment,
             )
           end
 
@@ -107,7 +108,7 @@ module VCAP::CloudController
             ]
           end
 
-          it 'returns the correct docker staging action structure' do
+          it 'returns the correct buildpack staging action structure' do
             result = builder.action
 
             serial_action = result.serial_action
@@ -167,7 +168,7 @@ module VCAP::CloudController
         end
 
         describe '#cached_dependencies' do
-          it 'always returns the builpdack lifecycle bundle dependency' do
+          it 'always returns the buildpack lifecycle bundle dependency' do
             result = builder.cached_dependencies
             expect(result).to include(
               ::Diego::Bbs::Models::CachedDependency.new(

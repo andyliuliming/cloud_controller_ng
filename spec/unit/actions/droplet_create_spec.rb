@@ -4,6 +4,8 @@ require 'cloud_controller/backends/staging_memory_calculator'
 require 'cloud_controller/backends/staging_disk_calculator'
 require 'cloud_controller/backends/staging_environment_builder'
 require 'messages/droplet_create_message'
+require 'isolation_segment_assign'
+require 'isolation_segment_unassign'
 
 module VCAP::CloudController
   RSpec.describe DropletCreate do
@@ -17,9 +19,10 @@ module VCAP::CloudController
 
     let(:lifecycle) { BuildpackLifecycle.new(package, staging_message) }
     let(:package) { PackageModel.make(app: app, state: PackageModel::READY_STATE) }
-    let(:app) { AppModel.make }
-    let(:space) { app.space }
+
+    let(:space) { Space.make }
     let(:org) { space.organization }
+    let(:app) { AppModel.make(space: space) }
 
     let(:staging_message) { DropletCreateMessage.create_from_http_request(request) }
 
@@ -104,6 +107,97 @@ module VCAP::CloudController
             expect(staging_details.staging_disk_in_mb).to eq(calculated_staging_disk_in_mb)
             expect(staging_details.environment_variables).to eq(environment_variables)
             expect(staging_details.lifecycle).to eq(lifecycle)
+            expect(staging_details.isolation_segment).to be_nil
+          end
+        end
+
+        describe 'isolation segments' do
+          let(:assigner) { VCAP::CloudController::IsolationSegmentAssign.new }
+          let(:isolation_segment_model) { VCAP::CloudController::IsolationSegmentModel.make }
+          let(:isolation_segment_model_2) { VCAP::CloudController::IsolationSegmentModel.make }
+          let(:shared_isolation_segment) {
+            VCAP::CloudController::IsolationSegmentModel.first(guid: VCAP::CloudController::IsolationSegmentModel::SHARED_ISOLATION_SEGMENT_GUID)
+          }
+
+          context 'when the org has a default' do
+            context 'and the default is the shared isolation segments' do
+              before do
+                assigner.assign(shared_isolation_segment, [org])
+              end
+
+              it 'does not set an isolation segment' do
+                action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
+                expect(stager).to have_received(:stage) do |staging_details|
+                  expect(staging_details.isolation_segment).to be_nil
+                end
+              end
+            end
+
+            context 'and the default is not the shared isolation segment' do
+              before do
+                assigner.assign(isolation_segment_model, [org])
+                org.update(default_isolation_segment_model: isolation_segment_model)
+              end
+
+              it 'sets the isolation segment' do
+                action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
+                expect(stager).to have_received(:stage) do |staging_details|
+                  expect(staging_details.isolation_segment).to eq(isolation_segment_model.name)
+                end
+              end
+
+              context 'and the space from that org has an isolation segment' do
+                context 'and the isolation segment is the shared isolation segment' do
+                  before do
+                    assigner.assign(shared_isolation_segment, [org])
+                    space.isolation_segment_model = shared_isolation_segment
+                    space.save
+                    space.reload
+                  end
+
+                  it 'does not set the isolation segment' do
+                    action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
+                    expect(stager).to have_received(:stage) do |staging_details|
+                      expect(staging_details.isolation_segment).to be_nil
+                    end
+                  end
+                end
+
+                context 'and the isolation segment is not the shared or the default' do
+                  before do
+                    assigner.assign(isolation_segment_model_2, [org])
+                    space.isolation_segment_model = isolation_segment_model_2
+                    space.save
+                  end
+
+                  it 'sets the IS from the space' do
+                    action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
+                    expect(stager).to have_received(:stage) do |staging_details|
+                      expect(staging_details.isolation_segment).to eq(isolation_segment_model_2.name)
+                    end
+                  end
+                end
+              end
+            end
+          end
+
+          context 'when the org does not have a default' do
+            context 'and the space from that org has an isolation segment' do
+              context 'and the isolation segment is not the shared isolation segment' do
+                before do
+                  assigner.assign(isolation_segment_model, [org])
+                  space.isolation_segment_model = isolation_segment_model
+                  space.save
+                end
+
+                it 'sets the isolation segment' do
+                  action.create_and_stage(package: package, lifecycle: lifecycle, message: staging_message, user: user, user_email: user_email)
+                  expect(stager).to have_received(:stage) do |staging_details|
+                    expect(staging_details.isolation_segment).to eq(isolation_segment_model.name)
+                  end
+                end
+              end
+            end
           end
         end
       end

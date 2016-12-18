@@ -3,6 +3,7 @@ require 'cloud_controller/diego/staging_request'
 
 module VCAP::CloudController::Diego
   RSpec.describe StagingRequest do
+    let(:isolation_segment_model) { VCAP::CloudController::IsolationSegmentModel.make }
     let(:app) do
       VCAP::CloudController::AppFactory.make(
         stack:            VCAP::CloudController::Stack.default,
@@ -53,7 +54,29 @@ module VCAP::CloudController::Diego
     end
 
     describe 'validation' do
-      let(:optional_keys) { [:lifecycle_data, :egress_rules] }
+      let(:optional_keys) { [:lifecycle_data, :egress_rules, :isolation_segment] }
+
+      context "when the app's space is not associated with an isolation segment" do
+        it 'does not raise an error' do
+          expect {
+            staging_request.message
+          }.to_not raise_error
+        end
+
+        it 'omits isolation_segment data from the message' do
+          expect(staging_request.message.keys).to_not include(:isolation_segment)
+        end
+      end
+
+      context "when the app's space is associated with an isolation segment" do
+        before do
+          staging_request.isolation_segment = 'segment-name'
+        end
+
+        it 'includes the isolation_segment name in the message' do
+          expect(staging_request.message[:isolation_segment]).to eq('segment-name')
+        end
+      end
 
       context 'when lifecycle data is missing' do
         before do

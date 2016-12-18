@@ -49,7 +49,46 @@ http {
   }
 
   server {
+    listen <%= p("cc.tls_port") %> ssl;
+
+    ssl_certificate /var/vcap/jobs/cloud_controller_ng/config/certs/mutual_tls.crt;
+    ssl_certificate_key /var/vcap/jobs/cloud_controller_ng/config/certs/mutual_tls.key;
+    ssl_client_certificate /var/vcap/jobs/cloud_controller_ng/config/certs/mutual_tls_ca.crt;
+    ssl_verify_client on;
+
+    location ~ /internal/v3/staging/.*/droplet_completed {
+      access_log                  <%= p("cc.nginx_access_log_destination") %>  main;
+      access_log                  syslog:server=127.0.0.1,severity=info,tag=vcap_nginx_access main;
+      proxy_buffering             off;
+      proxy_set_header            Host $host;
+      proxy_set_header            X-Real_IP $remote_addr;
+      proxy_set_header            X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_redirect              off;
+      proxy_connect_timeout       10;
+      proxy_pass                  http://cloud_controller;
+
+      <% if_p("cc.nginx_rate_limit_general") do %>
+      limit_req zone=all burst=<%= p("cc.nginx_rate_limit_general")['burst'] %> nodelay;
+      <% end %>
+
+      <% if_p("cc.nginx_rate_limit_zones") do %>
+        <% p("cc.nginx_rate_limit_zones").each do |zone| %>
+      location <%= zone['location'] %> {
+        limit_req zone=<%= zone['name'] %> burst=<%= zone['burst'] %> nodelay;
+        proxy_pass                  http://cloud_controller;
+      }
+        <% end %>
+      <% end %>
+    }
+  }
+
+  server {
+  <% if p("cc.nginx.ip").empty? %>
     listen    <%= p("cc.external_port") %>;
+  <% else %>
+    listen    <%= p("cc.nginx.ip") %>:<%= p("cc.external_port") %>;
+  <% end %>
+
     server_name  _;
     server_name_in_redirect off;
     <% if p("request_timeout_in_seconds").to_i > 0 %>
@@ -77,6 +116,7 @@ http {
         <% p("cc.nginx_rate_limit_zones").each do |zone| %>
       location <%= zone['location'] %> {
         limit_req zone=<%= zone['name'] %> burst=<%= zone['burst'] %> nodelay;
+        proxy_pass                  http://cloud_controller;
       }
         <% end %>
       <% end %>
@@ -169,7 +209,7 @@ http {
 
     # Pass altered request body to a backend
     location @cc_uploads {
-      proxy_pass http://unix:/var/vcap/sys/run/cloud_controller_ng/cloud_controller.sock;
+      proxy_pass http://cloud_controller;
     }
 
     location ~ ^/internal_redirect/(.*){

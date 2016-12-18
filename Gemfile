@@ -11,6 +11,7 @@ gem 'eventmachine', '~> 1.0.9'
 # that has not been updated in the fog gem. See https://www.pivotaltracker.com/story/show/128669549 for more info
 gem 'fog-google', '~> 0.4.0'
 gem 'google-api-client', '~> 0.8.6'
+gem 'fog-azure-rm', '~> 0.1.2'
 
 gem 'fog'
 gem 'i18n'
@@ -39,9 +40,11 @@ gem 'statsd-ruby'
 gem 'activemodel'
 gem 'actionpack'
 gem 'actionview'
-gem 'public_suffix'
 gem 'tiny_tds', '1.0.5'
 gem 'beefcake'
+gem 'public_suffix', '~> 1.0'
+gem 'protobuf'
+gem 'net-ssh'
 
 # Requiring this particular commit to get a fix to a race condition when subscribing before a connection is made.
 # (see https://github.com/nats-io/ruby-nats/commit/3f3efc6bc41cc483f2d90cb9d401ba4aa3e727d3)
@@ -53,10 +56,10 @@ gem 'nats', git: 'https://github.com/nats-io/ruby-nats', ref: '8571cf9d685b60630
 gem 'vcap-concurrency', git: 'https://github.com/cloudfoundry/vcap-concurrency.git', ref: '2a5b0179'
 gem 'cf-uaa-lib', '~> 3.1.0', git: 'https://github.com/cloudfoundry/cf-uaa-lib.git', ref: 'b1e11235dc6cd7d8d4680e005526de37201305ea'
 gem 'cf-message-bus', '~> 0.3.0'
-gem 'bits_service_client', git: 'https://github.com/cloudfoundry-incubator/bits-service-client.git'
+gem 'bits_service_client'
 
 group :db do
-  gem 'mysql2', '0.4.4'
+  gem 'mysql2', '0.4.5'
   gem 'pg', '0.19.0'
 end
 

@@ -89,7 +89,7 @@
                   <span class="name">q</span>
               </td>
               <td>
-                  <span class="description">Parameters used to filter the result set.<br/>Format queries as &lt;filter&gt;&lt;op&gt;&lt;value&gt;<br/> Valid ops: : &gt;= &lt;= &lt; &gt; IN<br/> Valid filters: timestamp, type, actee</span>
+                  <span class="description">Parameters used to filter the result set.<br/>Format queries as &lt;filter&gt;&lt;op&gt;&lt;value&gt;<br/> Valid ops: : &gt;= &lt;= &lt; &gt; IN<br/> Valid filters: timestamp, type, actee, space_guid, organization_guid</span>
               </td>
               <td>
                 <ul class="valid_values">
@@ -322,6 +322,20 @@ Cookie: </pre>
                       <li>audit.user_provided_service_instance.create</li>
                       <li>audit.user_provided_service_instance.delete</li>
                       <li>audit.user_provided_service_instance.update</li>
+                      <li>audit.user.space_auditor_add</li>
+                      <li>audit.user.space_auditor_remove</li>
+                      <li>audit.user.space_manager_add</li>
+                      <li>audit.user.space_manager_remove</li>
+                      <li>audit.user.space_developer_add</li>
+                      <li>audit.user.space_developer_remove</li>
+                      <li>audit.user.organization_auditor_add</li>
+                      <li>audit.user.organization_auditor_remove</li>
+                      <li>audit.user.organization_billing_manager_add</li>
+                      <li>audit.user.organization_billing_manager_remove</li>
+                      <li>audit.user.organization_manager_add</li>
+                      <li>audit.user.organization_manager_remove</li>
+                      <li>audit.user.organization_user_add</li>
+                      <li>audit.user.organization_user_remove</li>
                   </ul>
                 </td>
                 <td>
@@ -450,6 +464,7 @@ Cookie: </pre>
                         <li>service_plan</li>
                         <li>service_plan_visibility</li>
                         <li>space</li>
+                        <li>user</li>
                         <li>user_provided_service_instance</li>
                   </ul>
                 </td>

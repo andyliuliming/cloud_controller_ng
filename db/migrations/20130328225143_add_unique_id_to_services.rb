@@ -7,7 +7,7 @@ Sequel.migration do
       add_index :unique_id, unique: true
     end
 
-    if self.class.name.match /mysql/i
+    if self.class.name =~ /mysql/i
       run "UPDATE services SET unique_id=CONCAT(provider,  '_', label)"
     elsif Sequel::Model.db.database_type == :mssql
       run "UPDATE services SET unique_id=CONCAT(provider,  '_', label)"

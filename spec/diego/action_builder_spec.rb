@@ -1,3 +1,4 @@
+require 'spec_helper'
 require 'diego/action_builder'
 
 module Diego
@@ -114,6 +115,19 @@ module Diego
         expect(emit_progress_action[:emit_progress_action].start_message).to eq('start')
         expect(emit_progress_action[:emit_progress_action].success_message).to eq('success')
         expect(emit_progress_action[:emit_progress_action].failure_message_prefix).to eq('failed: ')
+      end
+    end
+
+    describe 'codependent' do
+      it 'wraps a list of actions in a codependent action' do
+        action1 = Bbs::Models::TimeoutAction.new
+        action2 = Bbs::Models::TimeoutAction.new
+
+        serial_action = described_class.codependent([action1, action2])
+
+        expect(serial_action).to be_a(Bbs::Models::Action)
+        expect(serial_action[:codependent_action]).to be_a(Bbs::Models::CodependentAction)
+        expect(serial_action[:codependent_action].actions).to match_array([described_class.action(action1), described_class.action(action2)])
       end
     end
   end

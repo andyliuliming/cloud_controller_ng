@@ -20,23 +20,21 @@ module Diego
     end
 
     def desire_task(task_definition:, domain:, task_guid:)
-      task_request         = Bbs::Models::DesireTaskRequest.new(task_definition: task_definition, domain: domain, task_guid: task_guid)
-      encoded_task_request = protobuf_encode!(task_request)
+      request = protobuf_encode!({ task_definition: task_definition, domain: domain, task_guid: task_guid }, Bbs::Models::DesireTaskRequest)
 
       response = with_request_error_handling do
-        client.post(Routes::DESIRE_TASK, encoded_task_request, PROTOBUF_HEADER)
+        client.post(Routes::DESIRE_TASK, request, PROTOBUF_HEADER)
       end
 
       validate_status!(response: response, statuses: [200])
-      protobuf_decode!(response.body, Bbs::Models::TaskResponse)
+      protobuf_decode!(response.body, Bbs::Models::TaskLifecycleResponse)
     end
 
     def task_by_guid(task_guid)
-      request         = Bbs::Models::TaskByGuidRequest.new(task_guid: task_guid)
-      encoded_request = protobuf_encode!(request)
+      request = protobuf_encode!({ task_guid: task_guid }, Bbs::Models::TaskByGuidRequest)
 
       response = with_request_error_handling do
-        client.post(Routes::TASK_BY_GUID, encoded_request, PROTOBUF_HEADER)
+        client.post(Routes::TASK_BY_GUID, request, PROTOBUF_HEADER)
       end
 
       validate_status!(response: response, statuses: [200])
@@ -44,15 +42,80 @@ module Diego
     end
 
     def tasks(domain: nil, cell_id: nil)
-      request         = Bbs::Models::TasksRequest.new(domain: domain, cell_id: cell_id)
-      encoded_request = protobuf_encode!(request)
+      request = protobuf_encode!({ domain: domain, cell_id: cell_id }, Bbs::Models::TasksRequest)
 
       response = with_request_error_handling do
-        client.post(Routes::LIST_TASKS, encoded_request, PROTOBUF_HEADER)
+        client.post(Routes::LIST_TASKS, request, PROTOBUF_HEADER)
       end
 
       validate_status!(response: response, statuses: [200])
       protobuf_decode!(response.body, Bbs::Models::TasksResponse)
+    end
+
+    def cancel_task(task_guid)
+      request = protobuf_encode!({ task_guid: task_guid }, Bbs::Models::TaskGuidRequest)
+
+      response = with_request_error_handling do
+        client.post(Routes::CANCEL_TASK, request, PROTOBUF_HEADER)
+      end
+
+      validate_status!(response: response, statuses: [200])
+      protobuf_decode!(response.body, Bbs::Models::TaskLifecycleResponse)
+    end
+
+    def desire_lrp(lrp)
+      request = protobuf_encode!({ desired_lrp: lrp }, Bbs::Models::DesireLRPRequest)
+
+      response = with_request_error_handling do
+        client.post(Routes::DESIRE_LRP, request, PROTOBUF_HEADER)
+      end
+
+      validate_status!(response: response, statuses: [200])
+      protobuf_decode!(response.body, Bbs::Models::DesiredLRPLifecycleResponse)
+    end
+
+    def desired_lrp_by_process_guid(process_guid)
+      request = protobuf_encode!({ process_guid: process_guid }, Bbs::Models::DesiredLRPByProcessGuidRequest)
+
+      response = with_request_error_handling do
+        client.post(Routes::DESIRED_LRP_BY_PROCESS_GUID, request, PROTOBUF_HEADER)
+      end
+
+      validate_status!(response: response, statuses: [200])
+      protobuf_decode!(response.body, Bbs::Models::DesiredLRPResponse)
+    end
+
+    def update_desired_lrp(process_guid, lrp_update)
+      request = protobuf_encode!({ process_guid: process_guid, update: lrp_update }, Bbs::Models::UpdateDesiredLRPRequest)
+
+      response = with_request_error_handling do
+        client.post(Routes::UPDATE_DESIRED_LRP, request, PROTOBUF_HEADER)
+      end
+
+      validate_status!(response: response, statuses: [200])
+      protobuf_decode!(response.body, Bbs::Models::DesiredLRPLifecycleResponse)
+    end
+
+    def remove_desired_lrp(process_guid)
+      request = protobuf_encode!({ process_guid: process_guid }, Bbs::Models::RemoveDesiredLRPRequest)
+
+      response = with_request_error_handling do
+        client.post(Routes::REMOVE_DESIRED_LRP, request, PROTOBUF_HEADER)
+      end
+
+      validate_status!(response: response, statuses: [200])
+      protobuf_decode!(response.body, Bbs::Models::DesiredLRPLifecycleResponse)
+    end
+
+    def retire_actual_lrp(actual_lrp_key)
+      request = protobuf_encode!({ actual_lrp_key: actual_lrp_key }, Bbs::Models::RetireActualLRPRequest)
+
+      response = with_request_error_handling do
+        client.post(Routes::RETIRE_ACTUAL_LRP, request, PROTOBUF_HEADER)
+      end
+
+      validate_status!(response: response, statuses: [200])
+      protobuf_decode!(response.body, Bbs::Models::ActualLRPLifecycleResponse)
     end
 
     def with_request_error_handling(&blk)
@@ -67,8 +130,8 @@ module Diego
 
     attr_reader :client
 
-    def protobuf_encode!(object)
-      object.encode.to_s
+    def protobuf_encode!(object, encoder)
+      encoder.encode(object)
     rescue => e
       raise EncodeError.new(e.message)
     end

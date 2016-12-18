@@ -13,6 +13,7 @@ module VCAP::CloudController
     define_schema do
       {
         :external_port => Integer,
+        :tls_port => Integer,
         :external_protocol => String,
         :internal_service_hostname => String,
         :info => {
@@ -283,11 +284,14 @@ module VCAP::CloudController
 
         optional(:diego) => {
           temporary_local_staging:               bool,
+          temporary_local_tasks:                 bool,
+          temporary_local_apps:                  bool,
           nsync_url:                             String,
           stager_url:                            String,
           tps_url:                               String,
           file_server_url:                       String,
           cc_uploader_url:                       String,
+          use_privileged_containers_for_running: bool,
           use_privileged_containers_for_staging: bool,
           lifecycle_bundles:                     Hash,
 
